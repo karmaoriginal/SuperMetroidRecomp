@@ -12,6 +12,7 @@ on:
       - '.github/workflows/android.yml'
       - 'android/**'
       - 'src/main.c'
+      - 'src/android_touch.c'
       - 'CMakeLists.txt'
       - 'snesrecomp'
       - 'recomp-ui'
