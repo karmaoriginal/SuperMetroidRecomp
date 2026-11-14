@@ -424,6 +424,7 @@ set(SM_HOST_SOURCES
 )
 
 if(ANDROID)
+    list(APPEND SM_HOST_SOURCES src/android_touch.c)
     # SDLActivity loads "libmain.so" and calls its SDL_main.
     add_library(SuperMetroidSNESRecomp SHARED ${SM_HOST_SOURCES})
     set_target_properties(SuperMetroidSNESRecomp PROPERTIES OUTPUT_NAME main)

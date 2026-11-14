@@ -20,6 +20,7 @@ import java.util.Map;
  * input path. Positions are normalized and survive rotation/resolution changes. */
 public final class TouchControlsView extends FrameLayout {
     private static final String PREFS = "touch-controls-v1";
+    private static native void nativeSetKey(int androidKeyCode, boolean pressed);
     private final SharedPreferences prefs;
     private final Map<String, Control> controls = new LinkedHashMap<>();
     private Runnable settingsListener;
@@ -89,9 +90,13 @@ public final class TouchControlsView extends FrameLayout {
             down = pressed;
             setPressed(pressed);
             try {
+                nativeSetKey(spec.key, pressed);
+            } catch (UnsatisfiedLinkError ignored) {
+                // Compatibility with an older native library during an Android
+                // activity restore; fresh APKs always use the direct bridge.
                 if (pressed) SDLActivity.onNativeKeyDown(spec.key);
                 else SDLActivity.onNativeKeyUp(spec.key);
-            } catch (UnsatisfiedLinkError ignored) { down = false; }
+            }
         }
     }
 
