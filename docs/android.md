@@ -47,9 +47,11 @@ currently arm64-v8a and requires Android 9 (API 28) or newer.
 
 ## GitHub Actions
 
-Run **Android APK** from the Actions tab and provide the SHA-256 of the generated
-code archive. As with desktop releases, maintainers must set the
-`SM_GENERATED_CODE_URL` repository secret to a short-lived URL for that exact
-archive. The workflow verifies it, fetches pinned SDL 2.32.8, builds the APK, and
-uploads the APK plus `SHA256SUMS` as a 14-day artifact. Neither the ROM nor the
+Android/runtime changes trigger **Android APK** automatically; it can also be
+started manually with the SHA-256 of the generated-code archive. As with desktop
+releases, maintainers must set the `SM_GENERATED_CODE_URL` repository secret to a
+short-lived URL for that exact archive. Manual runs verify the supplied digest;
+automatic runs calculate and log the downloaded archive digest. The workflow
+fetches pinned SDL 2.32.8, builds the APK, and uploads the APK plus `SHA256SUMS`
+as a 14-day artifact. Neither the ROM nor the
 generated archive is uploaded as an artifact.

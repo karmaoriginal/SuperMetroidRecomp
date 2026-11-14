@@ -5,6 +5,16 @@ name: Android APK
 # generated-code archive as the desktop release workflow; the ROM itself never
 # enters Actions and is never packaged in the APK.
 on:
+  # Build automatically whenever Android/runtime integration changes. This also
+  # makes a new workflow run on feature branches before it reaches main.
+  push:
+    paths:
+      - '.github/workflows/android.yml'
+      - 'android/**'
+      - 'src/main.c'
+      - 'CMakeLists.txt'
+      - 'snesrecomp'
+      - 'recomp-ui'
   workflow_dispatch:
     inputs:
       generated_sha256:
@@ -27,6 +37,7 @@ permissions:
 
 env:
   ANDROID_NDK_VERSION: 26.3.11579264
+  APK_VARIANT: ${{ inputs.build_type || 'release' }}
 
 jobs:
   apk:
@@ -44,6 +55,7 @@ jobs:
           cache-dependency-path: android/*.gradle
 
       - name: Validate generated-code input
+        if: github.event_name == 'workflow_dispatch'
         env:
           INPUT_SHA256: ${{ inputs.generated_sha256 }}
         run: '[[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]'
@@ -62,6 +74,13 @@ jobs:
           set -euo pipefail
           [[ -n "$INPUT_URL" ]] || { echo "::error::Set SM_GENERATED_CODE_URL to a short-lived generated-code archive"; exit 1; }
           curl --fail --silent --show-error --location "$INPUT_URL" --output "$RUNNER_TEMP/sm-generated.tar.gz"
+          # Manual releases verify the maintainer-supplied digest. Automatic
+          # branch builds still work with the existing URL-only secret and log
+          # the exact digest used by release_payload.py.
+          if [[ -z "$INPUT_SHA256" ]]; then
+            INPUT_SHA256="$(sha256sum "$RUNNER_TEMP/sm-generated.tar.gz" | cut -d' ' -f1)"
+            echo "Automatic input SHA-256: $INPUT_SHA256"
+          fi
           python3 tools/release_payload.py restore "$RUNNER_TEMP/sm-generated.tar.gz" --sha256 "$INPUT_SHA256"
           rm "$RUNNER_TEMP/sm-generated.tar.gz"
 
@@ -72,18 +91,18 @@ jobs:
         working-directory: android
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false
-        run: ./gradlew --stacktrace assemble${{ inputs.build_type == 'release' && 'Release' || 'Debug' }}
+        run: ./gradlew --stacktrace "assemble${APK_VARIANT^}"
 
       - name: Collect APK and checksum
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/${{ inputs.build_type }}/*.apk \
-             artifacts/SuperMetroidRecomp-${{ inputs.build_type }}-arm64.apk
+          cp android/app/build/outputs/apk/${APK_VARIANT}/*.apk \
+             artifacts/SuperMetroidRecomp-${APK_VARIANT}-arm64.apk
           (cd artifacts && sha256sum *.apk > SHA256SUMS)
 
       - uses: actions/upload-artifact@v4
         with:
-          name: supermetroid-android-${{ inputs.build_type }}-arm64
+          name: supermetroid-android-${{ env.APK_VARIANT }}-arm64
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
