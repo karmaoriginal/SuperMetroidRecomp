@@ -64,10 +64,14 @@ def main():
         if not repo_info["private"]:
             raise SystemExit(f"Refusing public storage repository: {storage}")
 
-    # GitHub cannot create a release in a completely empty repository. A vault
-    # created by an earlier failed attempt is empty too, so initialize both new
-    # and existing empty vaults through the API (no local clone is needed).
-    if repo_info.get("size", 0) == 0:
+    # GitHub cannot create a release in a completely empty repository. Query
+    # the file itself rather than repo_info.size: that size can remain zero for
+    # a while after the first commit, which made a retry attempt to overwrite
+    # README.md without the API-required existing-file SHA.
+    readme_probe = subprocess.run(
+        [gh, "api", f"repos/{storage}/contents/README.md"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if readme_probe.returncode:
         readme = base64.b64encode(
             b"# Private Android build inputs\n\nNever make this repository public.\n"
         ).decode("ascii")
