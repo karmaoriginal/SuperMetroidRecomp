@@ -22,6 +22,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __ANDROID__
+#include <dirent.h>
+#include <unistd.h>
+#include "mod_runtime.h"
+#include "recomp_launcher.h"
+#endif
 #ifndef SM_NATIVE_RASTER
 #define SM_NATIVE_RASTER 0
 #endif
@@ -132,10 +138,45 @@ static void SmAfterConfig(void) {
                          g_sm_video.fps, g_sm_video.hud_anchored);
 }
 
+#ifdef __ANDROID__
+/* The Java library cannot call the native provider before SDL initializes it.
+ * It therefore drops user-selected archives into an inbox. At the first game
+ * boot the already-hardened runtime installer validates/extracts them, and the
+ * package is available from the next launch. Failed archives remain so the
+ * error is visible in logcat/session logs instead of being silently lost. */
+static void SmAndroidInstallModInbox(void) {
+  const char *inbox = "mods/inbox";
+  DIR *dir = opendir(inbox);
+  if (!dir) return;
+  const RecompLauncherCModProvider *provider = snes_mod_runtime_launcher_provider_c();
+  if (!provider || !provider->install_archive) { closedir(dir); return; }
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != NULL) {
+    size_t n = strlen(entry->d_name);
+    if (n < 9 || strcmp(entry->d_name + n - 8, ".snesmod") != 0) continue;
+    char path[1024];
+    if (snprintf(path, sizeof(path), "%s/%s", inbox, entry->d_name) >= (int)sizeof(path))
+      continue;
+    if (provider->install_archive(provider->ctx, path)) {
+      fprintf(stderr, "[android] installed mod %s; active after restart\n", entry->d_name);
+      unlink(path);
+    } else {
+      const char *error = provider->last_error ? provider->last_error(provider->ctx) : NULL;
+      fprintf(stderr, "[android] mod install failed for %s: %s\n",
+              entry->d_name, error ? error : "unknown error");
+    }
+  }
+  closedir(dir);
+}
+#endif
+
 static void SmOnRomLoaded(const uint8_t *rom, size_t size) {
   SmReplayRomLoaded(rom, (unsigned)size);
   SmRendererSetRom(rom, size);
   SmRoomsSetRom(rom,size);
+#ifdef __ANDROID__
+  SmAndroidInstallModInbox();
+#endif
 }
 
 static void SmOnReset(void) {

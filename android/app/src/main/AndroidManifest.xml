@@ -10,14 +10,15 @@
     <application
         android:label="Super Metroid Recomp"
         android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
         android:allowBackup="true"
         android:hardwareAccelerated="true">
 
+        <!-- Native Android library: ROM/content import happens before SDL is
+             loaded, so the APK never needs broad storage permissions. -->
         <activity
-            android:name="org.libsdl.app.SDLActivity"
+            android:name="com.snesrecomp.supermetroid.LauncherActivity"
             android:label="Super Metroid Recomp"
-            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
-            android:preferMinimalPostProcessing="true"
             android:screenOrientation="sensorLandscape"
             android:exported="true">
             <intent-filter>
@@ -25,6 +26,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.snesrecomp.supermetroid.GameActivity"
+            android:label="Super Metroid Recomp"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:preferMinimalPostProcessing="true"
+            android:screenOrientation="sensorLandscape"
+            android:exported="false" />
     </application>
 
 </manifest>

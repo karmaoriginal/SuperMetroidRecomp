@@ -9,8 +9,8 @@ android {
         // posix_spawn (recomp-ui launcher_files.c) needs bionic API 28+.
         minSdkVersion 28
         targetSdkVersion 34
-        versionCode 1
-        versionName "0.1"
+        versionCode 42
+        versionName "0.4.2"
         externalNativeBuild {
             cmake {
                 // The recompiled banks are huge; always compile them optimized.
@@ -22,9 +22,16 @@ android {
     }
     buildTypes {
         release {
+            // Keep Actions/local artifacts directly installable. Production
+            // distributors can override this with their own signing pipeline.
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
     externalNativeBuild {
         cmake {

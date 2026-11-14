@@ -170,6 +170,15 @@ implementation and validation record is in `docs/custom-renderer.md`.
 The release procedure and profile are documented in `docs/precompiled-releases.md`.
 Host snapshots require matching runtime builds; use guest SRAM when upgrading.
 
+## Android
+
+An arm64 Android port is available under `android/`. Its native library screen
+imports and locally verifies the player's own ROM, manages `.snesmod` and
+texture-pack files, and launches the game with a configurable multi-touch SNES
+controller overlay. The ROM is never included in the APK. GitHub Actions can
+produce a downloadable APK artifact using the same private generated-code input
+as desktop releases. See [the Android build and usage guide](docs/android.md).
+
 ## Building from source
 
 Prerequisites: a `snesrecomp` checkout at `./snesrecomp` (junction/symlink
