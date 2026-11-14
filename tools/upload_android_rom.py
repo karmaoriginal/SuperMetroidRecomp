@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import time
 import urllib.error
 import urllib.request
 
@@ -80,12 +81,33 @@ def main():
     if found.returncode:
         run("release", "create", tag, "--repo", storage, "--title", tag,
             "--notes", "Private user-owned ROM. Never publish or redistribute.")
+    def find_rom_asset(release):
+        # GitHub may normalize spaces and punctuation in an uploaded asset's
+        # filename. This release tag is unique to the verified ROM digest, so
+        # identify its sole 3 MiB payload by exact digest/name first and size
+        # second instead of assuming the server preserves rom.name verbatim.
+        for candidate in release["assets"]:
+            if candidate.get("digest") == "sha256:" + digest:
+                return candidate
+        for candidate in release["assets"]:
+            if candidate["name"] == rom.name:
+                return candidate
+        sized = [a for a in release["assets"] if a.get("size") == EXPECTED_SIZE]
+        return sized[0] if len(sized) == 1 else None
+
     release = json.loads(run("api", f"repos/{storage}/releases/tags/{tag}"))
-    asset = next((a for a in release["assets"] if a["name"] == rom.name), None)
+    asset = find_rom_asset(release)
     if asset is None:
         run("release", "upload", tag, str(rom), "--repo", storage)
-        release = json.loads(run("api", f"repos/{storage}/releases/tags/{tag}"))
-        asset = next(a for a in release["assets"] if a["name"] == rom.name)
+        # Release asset listings can be briefly eventually consistent.
+        for _ in range(10):
+            release = json.loads(run("api", f"repos/{storage}/releases/tags/{tag}"))
+            asset = find_rom_asset(release)
+            if asset is not None:
+                break
+            time.sleep(1)
+    if asset is None:
+        raise SystemExit("ROM upload completed, but GitHub did not list its private release asset")
     if asset.get("digest") not in (None, "sha256:" + digest):
         raise SystemExit("Private uploaded asset digest differs from the local ROM")
 
