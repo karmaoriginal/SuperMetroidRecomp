@@ -48,10 +48,15 @@ currently arm64-v8a and requires Android 9 (API 28) or newer.
 ## GitHub Actions
 
 Android/runtime changes trigger **Android APK** automatically; it can also be
-started manually with the SHA-256 of the generated-code archive. As with desktop
-releases, maintainers must set the `SM_GENERATED_CODE_URL` repository secret to a
-short-lived URL for that exact archive. Manual runs verify the supplied digest;
-automatic runs calculate and log the downloaded archive digest. The workflow
-fetches pinned SDL 2.32.8, builds the APK, and uploads the APK plus `SHA256SUMS`
-as a 14-day artifact. Neither the ROM nor the
-generated archive is uploaded as an artifact.
+started manually. The preferred maintainer path sets `SM_GENERATED_CODE_URL` to
+a short-lived generated-code archive. For a phone-only owner, run
+`tools/upload_android_rom.py` in Termux: it verifies the owned ROM, stores it in
+the user's private GitHub vault, and sets a short-lived `SM_ANDROID_ROM_URL`.
+The ephemeral Actions runner verifies the ROM again, generates the private C
+program, deletes the ROM before building, and never caches or publishes it.
+
+The workflow fetches pinned SDL 2.32.8, builds the APK, and uploads the APK plus
+`SHA256SUMS` as a 14-day artifact. Neither the ROM nor generated C is uploaded
+as an Actions artifact. The phone-only route is an explicit privacy trade-off:
+the owned ROM briefly enters a private GitHub release and an ephemeral runner;
+use the generated-code route when a suitable local computer is available.

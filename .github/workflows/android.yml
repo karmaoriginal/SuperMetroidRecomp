@@ -1,9 +1,9 @@
 name: Android APK
 
-# Generated recompiler output is derived from copyrighted ROM bytes and is not
-# stored in Git. This workflow uses the same maintainer-provided, short-lived
-# generated-code archive as the desktop release workflow; the ROM itself never
-# enters Actions and is never packaged in the APK.
+# Private inputs are never stored in Git or uploaded as workflow artifacts.
+# Preferred builds restore a maintainer-generated archive. Phone-only owners
+# may opt in to a short-lived private ROM URL: the ephemeral runner verifies it,
+# generates the C program, deletes the ROM, and publishes only the compiled APK.
 on:
   # Build automatically whenever Android/runtime integration changes. This also
   # makes a new workflow run on feature branches before it reaches main.
@@ -18,8 +18,8 @@ on:
   workflow_dispatch:
     inputs:
       generated_sha256:
-        description: SHA-256 of the private generated-code archive
-        required: true
+        description: SHA-256 of the private generated-code archive (leave empty when using SM_ANDROID_ROM_URL)
+        required: false
         type: string
       build_type:
         description: APK variant
@@ -43,11 +43,11 @@ jobs:
   apk:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -55,7 +55,7 @@ jobs:
           cache-dependency-path: android/*.gradle
 
       - name: Validate generated-code input
-        if: github.event_name == 'workflow_dispatch'
+        if: inputs.generated_sha256 != ''
         env:
           INPUT_SHA256: ${{ inputs.generated_sha256 }}
         run: '[[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]'
@@ -66,23 +66,36 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "build-tools;34.0.0" "ndk;${ANDROID_NDK_VERSION}"
 
-      - name: Restore private generated program
+      - name: Prepare private generated program
         env:
+          ROM_URL: ${{ secrets.SM_ANDROID_ROM_URL }}
           INPUT_URL: ${{ secrets.SM_GENERATED_CODE_URL }}
           INPUT_SHA256: ${{ inputs.generated_sha256 }}
         run: |
           set -euo pipefail
-          [[ -n "$INPUT_URL" ]] || { echo "::error::Set SM_GENERATED_CODE_URL to a short-lived generated-code archive"; exit 1; }
-          curl --fail --silent --show-error --location "$INPUT_URL" --output "$RUNNER_TEMP/sm-generated.tar.gz"
-          # Manual releases verify the maintainer-supplied digest. Automatic
-          # branch builds still work with the existing URL-only secret and log
-          # the exact digest used by release_payload.py.
-          if [[ -z "$INPUT_SHA256" ]]; then
-            INPUT_SHA256="$(sha256sum "$RUNNER_TEMP/sm-generated.tar.gz" | cut -d' ' -f1)"
-            echo "Automatic input SHA-256: $INPUT_SHA256"
+          if [[ -n "$ROM_URL" ]]; then
+            ROM="$RUNNER_TEMP/super-metroid-owned.sfc"
+            trap 'rm -f "$ROM"' EXIT
+            curl --fail --silent --show-error --location "$ROM_URL" --output "$ROM"
+            echo '12b77c4bc9c1832cee8881244659065ee1d84c70c3d29e6eaf92e6798cc2ca72  '"$ROM" | sha256sum -c -
+            [[ "$(stat -c %s "$ROM")" -eq 3145728 ]]
+            python3 tools/regen.py --rom "$ROM"
+            rm -f "$ROM"
+            trap - EXIT
+          elif [[ -n "$INPUT_URL" ]]; then
+            curl --fail --silent --show-error --location "$INPUT_URL" --output "$RUNNER_TEMP/sm-generated.tar.gz"
+            # Manual releases verify the maintainer-supplied digest. Automatic
+            # builds calculate and log the exact private archive digest.
+            if [[ -z "$INPUT_SHA256" ]]; then
+              INPUT_SHA256="$(sha256sum "$RUNNER_TEMP/sm-generated.tar.gz" | cut -d' ' -f1)"
+              echo "Automatic input SHA-256: $INPUT_SHA256"
+            fi
+            python3 tools/release_payload.py restore "$RUNNER_TEMP/sm-generated.tar.gz" --sha256 "$INPUT_SHA256"
+            rm "$RUNNER_TEMP/sm-generated.tar.gz"
+          else
+            echo "::error::Set SM_ANDROID_ROM_URL (phone-only path) or SM_GENERATED_CODE_URL"
+            exit 1
           fi
-          python3 tools/release_payload.py restore "$RUNNER_TEMP/sm-generated.tar.gz" --sha256 "$INPUT_SHA256"
-          rm "$RUNNER_TEMP/sm-generated.tar.gz"
 
       - name: Fetch pinned SDL Android source
         run: bash android/fetch_sdl.sh
