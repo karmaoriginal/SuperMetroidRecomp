@@ -7,6 +7,7 @@ workflow verifies the known SHA-256, generates the private C program on its
 ephemeral runner, deletes the ROM, and publishes only the compiled APK.
 """
 import argparse
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -41,9 +42,13 @@ def main():
             f"image ({EXPECTED_SIZE} bytes, SHA-256 {EXPECTED_SHA256})")
 
     def run(*command, input_text=None):
-        return subprocess.check_output(
-            [gh, *command], text=True, input=input_text,
-            stderr=subprocess.STDOUT).strip()
+        try:
+            return subprocess.check_output(
+                [gh, *command], text=True, input=input_text,
+                stderr=subprocess.STDOUT).strip()
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stdout or "").strip()
+            raise SystemExit(f"gh {' '.join(command)} failed:\n{detail}") from None
 
     user = json.loads(run("api", "user"))["login"]
     storage = args.storage_repo or f"{user}/sm-android-rom-vault"
@@ -52,8 +57,22 @@ def main():
     if probe.returncode:
         run("repo", "create", storage, "--private",
             "--description", "Private owned-ROM input for ephemeral Android builds")
-    elif not json.loads(probe.stdout)["private"]:
-        raise SystemExit(f"Refusing public storage repository: {storage}")
+        repo_info = json.loads(run("api", f"repos/{storage}"))
+    else:
+        repo_info = json.loads(probe.stdout)
+        if not repo_info["private"]:
+            raise SystemExit(f"Refusing public storage repository: {storage}")
+
+    # GitHub cannot create a release in a completely empty repository. A vault
+    # created by an earlier failed attempt is empty too, so initialize both new
+    # and existing empty vaults through the API (no local clone is needed).
+    if repo_info.get("size", 0) == 0:
+        readme = base64.b64encode(
+            b"# Private Android build inputs\n\nNever make this repository public.\n"
+        ).decode("ascii")
+        run("api", "--method", "PUT", f"repos/{storage}/contents/README.md",
+            "-f", "message=Initialize private ROM vault",
+            "-f", f"content={readme}")
 
     tag = "super-metroid-owned-rom-" + digest[:16]
     found = subprocess.run([gh, "release", "view", tag, "--repo", storage],
